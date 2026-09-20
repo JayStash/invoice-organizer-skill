@@ -1,0 +1,10 @@
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
+.runtime/*
+!.runtime/.gitkeep
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/

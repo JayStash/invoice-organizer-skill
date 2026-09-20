@@ -1,0 +1,7 @@
+interface:
+  display_name: "发票整理"
+  short_description: "无损整理发票并生成结构化 Excel 清单"
+  default_prompt: "使用 $invoice-organizer-skill 只读扫描 input，生成预览；得到我的明确确认后，将整理副本输出到 output，保留所有原始文件，并生成发票整理清单.xlsx。"
+
+policy:
+  allow_implicit_invocation: false
