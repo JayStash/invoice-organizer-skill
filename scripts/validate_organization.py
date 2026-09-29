@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import zipfile
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -155,15 +156,17 @@ def validate_sequence_and_order(records: list[dict[str, Any]], errors: list[str]
         fail(errors, "类别顺序或同类业务日期顺序不符合计划")
 
     by_name = {record["new_name"]: record for record in records}
-    for report in (item for item in records if item.get("file_type") == "didi_report"):
-        related = by_name.get(report.get("didi_relation"))
+    for report in (item for item in records if item.get("file_type") == "ride_report"):
+        related = by_name.get(report.get("ride_relation"))
+        if not related:
+            continue
         report_seq = re.match(r"^(\d+)、", report["new_name"])
         invoice_seq = re.match(r"^(\d+)、", related["new_name"]) if related else None
         if not report_seq or not invoice_seq or report_seq.group(1) != invoice_seq.group(1):
-            fail(errors, f"滴滴行程单与发票序号不一致: {report['new_name']}")
+            fail(errors, f"打车行程单与发票序号不一致: {report['new_name']}")
 
 
-def validate_didi_source_fields(
+def validate_ride_source_fields(
     records: list[dict[str, Any]], input_dir: Path, errors: list[str]
 ) -> None:
     protected_fields = (
@@ -173,17 +176,30 @@ def validate_didi_source_fields(
         "tax_amount",
     )
     for record in records:
-        if record.get("file_type") != "didi_report":
+        if record.get("file_type") != "ride_report":
             continue
-        source = input_dir / record["original_name"]
         try:
-            extracted = read_pdf_record(record["original_name"], source.read_bytes())
+            if record.get("archive_source"):
+                archive_path = input_dir / record["archive_source"]
+                with zipfile.ZipFile(archive_path) as archive:
+                    source_bytes = archive.read(record["archive_member"])
+            else:
+                source = input_dir / record["original_name"]
+                source_bytes = source.read_bytes()
+            extracted = read_pdf_record(record["original_name"], source_bytes)
         except Exception as exc:
-            fail(errors, f"无法复核滴滴行程单自身字段: {record['original_name']}: {exc}")
+            fail(errors, f"无法复核打车行程单自身字段: {record['original_name']}: {exc}")
             continue
         for field in protected_fields:
             if record.get(field) != extracted.get(field):
-                fail(errors, f"滴滴行程单疑似继承发票字段 {field}: {record['new_name']}")
+                fail(errors, f"打车行程单疑似继承发票字段 {field}: {record['new_name']}")
+
+
+def validate_didi_source_fields(
+    records: list[dict[str, Any]], input_dir: Path, errors: list[str]
+) -> None:
+    """Backward-compatible alias for the generalized ride-report validation."""
+    validate_ride_source_fields(records, input_dir, errors)
 
 
 def validate_workbook(
@@ -292,7 +308,7 @@ def main() -> int:
     records = output_records(plan.get("records", []))
     validate_output(plan, output_dir, records, errors)
     validate_sequence_and_order(records, errors)
-    validate_didi_source_fields(records, input_dir, errors)
+    validate_ride_source_fields(records, input_dir, errors)
     validate_workbook(plan, output_dir, records, errors)
 
     if errors:

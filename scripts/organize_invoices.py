@@ -135,7 +135,9 @@ def build_workbook(records: list[dict[str, Any]], target: Path, generated_at: st
 
 
 def _read_output_payload(record: dict[str, Any], input_dir: Path) -> Path | bytes:
-    if record["file_type"] in {"invoice_pdf", "didi_report"}:
+    if record["file_type"] == "invoice_pdf" or (
+        record["file_type"] == "ride_report" and not record.get("archive_source")
+    ):
         source = input_dir / record["original_name"]
         ensure_direct_child(source, input_dir)
         if not source.is_file():
@@ -143,7 +145,7 @@ def _read_output_payload(record: dict[str, Any], input_dir: Path) -> Path | byte
         if sha256_file(source) != record["source_sha256"]:
             raise RuntimeError(f"input 源文件在扫描后发生变化: {record['original_name']}")
         return source
-    if record["file_type"] == "archive_pdf":
+    if record["file_type"] in {"archive_pdf", "ride_report"} and record.get("archive_source"):
         archive_path = input_dir / record["archive_source"]
         ensure_direct_child(archive_path, input_dir)
         if not archive_path.is_file():
